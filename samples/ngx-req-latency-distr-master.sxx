@@ -9,7 +9,7 @@
 global begin_times, pre_end_time
 global latencies, sep_latencies
 global init_conns
-global pid, matched_r, matched_pid
+global pid, matched_r, matched_pid, pids
 global log_r
 
 probe @pfunc(ngx_http_create_request)
@@ -29,6 +29,7 @@ probe @pfunc(ngx_http_process_request) {
                 matched_r = $r
                 matched_pid = pid
                 begin_times[$r] = begin_time
+
                 if (pre_end_time) {
                     sep_latencies <<< begin_times[$r] - pre_end_time
                     pre_end_time = 0
@@ -40,6 +41,7 @@ probe @pfunc(ngx_http_process_request) {
                     matched_r = $r
                     matched_pid = pid
                     begin_times[$r] = begin_time
+
                     if (pre_end_time) {
                         sep_latencies <<< begin_times[$r] - pre_end_time
                         pre_end_time = 0
@@ -53,6 +55,7 @@ probe @pfunc(ngx_http_process_request) {
 probe @pfunc(ngx_http_log_request) {
     if (pid() == matched_pid && $r == matched_r) {
         log_r = $r
+        pids[matched_pid] = pids[matched_pid] + 1
     }
 }
 
@@ -101,5 +104,11 @@ probe end {
         printf("sep (min/avg/max: %d/%d/%d)\n", @min(sep_latencies), @avg(sep_latencies),
                @max(sep_latencies))
         print(@hist_log(sep_latencies))
+
+        printf("pid \n")
+        foreach (id in pids) {
+            printf("pid: %d  count: %d\n", id, pids[id])
+        }
+
     }
 }
